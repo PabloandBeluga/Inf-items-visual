@@ -1,126 +1,704 @@
---// Rayfield Gen2
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+--//==================================================
+--// VISUAL ITEM SIMULATOR - RAYFIELD GEN2
+--//==================================================
+
+local Rayfield = loadstring(game:HttpGet(
+    "https://sirius.menu/gen2"
+))()
 
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
+local Player = Players.LocalPlayer
+
+--// Settings
 local ItemID = ""
 local Enabled = false
+local ManualDelete = false
+local Flying = false
+
 local VisualItems = {}
 
+local FlyBV
+local FlyBG
+local FlyConnection
+
+local FlyUp = false
+local FlyDown = false
+
+local SPAWN_DISTANCE = 6
+local SPAWN_DELAY = 0.35
+local FLY_SPEED = 60
+local MAX_ITEMS = 50
+
+--//==================================================
+--// RAYFIELD
+--//==================================================
+
 local Window = Rayfield:CreateWindow({
-    Name = "Visual Item Simulator",
-    LoadingTitle = "Visual Item Simulator",
-    LoadingSubtitle = "Initializing...",
+    name = "Visual Item Simulator",
+
+    loading = {
+        title = "Visual Item Simulator",
+        subtitle = "Loading..."
+    },
+
+    configuration = {
+        enabled = false
+    }
 })
 
 local Tab = Window:CreateTab({
-    Name = "Inf Items (Visual)",
-    Icon = "package"
-})
-
-Tab:CreateDivider()
-
-Tab:CreateText({
-    Text = "VISUAL ITEM CONTROL"
+    name = "Inf Items (Visual)",
+    icon = "package"
 })
 
 Tab:CreateText({
-    Text = "Enter an item ID from the game.\nAllowed: 1–7 numbers."
+    text = "VISUAL ITEM CONTROL"
 })
 
-local Input = Tab:CreateInput({
-    Name = "Item ID",
-    Placeholder = "Example: 40082",
-    Callback = function(text)
-        -- Numbers only
-        text = text:gsub("%D", "")
+Tab:CreateText({
+    text = "Enter a 1–7 digit item ID."
+})
 
-        -- Maximum 7 digits
-        text = text:sub(1, 7)
+--//==================================================
+--// CUSTOM ID GUI
+--//==================================================
 
-        ItemID = text
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "VisualItemIDGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerGui
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0, 45, 0, 45)
+ToggleButton.Position = UDim2.new(0, 10, 0.5, -22)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Text = "ID"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.Parent = ScreenGui
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 12)
+ButtonCorner.Parent = ToggleButton
+
+local IDFrame = Instance.new("Frame")
+IDFrame.Size = UDim2.new(0, 180, 0, 75)
+IDFrame.Position = UDim2.new(0, 62, 0.5, -37)
+IDFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+IDFrame.BorderSizePixel = 0
+IDFrame.Parent = ScreenGui
+
+local FrameCorner = Instance.new("UICorner")
+FrameCorner.CornerRadius = UDim.new(0, 12)
+FrameCorner.Parent = IDFrame
+
+local ItemName = Instance.new("TextLabel")
+ItemName.Position = UDim2.new(0, 8, 0, 5)
+ItemName.Size = UDim2.new(1, -16, 0, 27)
+ItemName.BackgroundTransparency = 1
+ItemName.Text = "No Item"
+ItemName.TextColor3 = Color3.fromRGB(255, 255, 255)
+ItemName.TextSize = 16
+ItemName.Font = Enum.Font.GothamBold
+ItemName.TextTruncate = Enum.TextTruncate.AtEnd
+ItemName.Parent = IDFrame
+
+local IDText = Instance.new("TextLabel")
+IDText.Position = UDim2.new(0, 8, 0, 34)
+IDText.Size = UDim2.new(1, -16, 0, 30)
+IDText.BackgroundTransparency = 1
+IDText.Text = "ID: NONE"
+IDText.TextColor3 = Color3.fromRGB(170, 170, 170)
+IDText.TextSize = 14
+IDText.Font = Enum.Font.Gotham
+IDText.Parent = IDFrame
+
+local GUIOpen = true
+
+ToggleButton.MouseButton1Click:Connect(function()
+    GUIOpen = not GUIOpen
+    IDFrame.Visible = GUIOpen
+end)
+
+--//==================================================
+--// HELD ITEM
+--//==================================================
+
+local function GetHeldTool()
+    local Character = Player.Character
+
+    if not Character then
+        return nil
+    end
+
+    for _, Object in ipairs(Character:GetChildren()) do
+        if Object:IsA("Tool") then
+            return Object
+        end
+    end
+
+    return nil
+end
+
+local function GetToolID(Tool)
+
+    if not Tool then
+        return nil
+    end
+
+    local Names = {
+        "ID",
+        "Id",
+        "ItemID",
+        "ItemId",
+        "AssetID",
+        "AssetId"
+    }
+
+    for _, Name in ipairs(Names) do
+        local Value = Tool:GetAttribute(Name)
+
+        if Value ~= nil then
+            return tostring(Value)
+        end
+    end
+
+    for _, Object in ipairs(Tool:GetDescendants()) do
+
+        if Object:IsA("StringValue")
+        or Object:IsA("IntValue")
+        or Object:IsA("NumberValue") then
+
+            local Name = Object.Name:lower()
+
+            if Name == "id"
+            or Name == "itemid"
+            or Name == "item_id"
+            or Name == "assetid"
+            or Name == "asset_id" then
+
+                return tostring(Object.Value)
+            end
+        end
+    end
+
+    return nil
+end
+
+local function UpdateHeldItem()
+
+    local Tool = GetHeldTool()
+
+    if not Tool then
+        ItemName.Text = "No Item"
+        IDText.Text = "ID: NONE"
+        return
+    end
+
+    ItemName.Text = Tool.Name
+
+    local FoundID = GetToolID(Tool)
+
+    if FoundID then
+        IDText.Text = "ID: " .. FoundID
+    elseif ItemID ~= "" then
+        IDText.Text = "ID: " .. ItemID
+    else
+        IDText.Text = "ID: NONE"
+    end
+end
+
+RunService.Heartbeat:Connect(UpdateHeldItem)
+
+--//==================================================
+--// ITEM ID
+--//==================================================
+
+Tab:CreateInput({
+    name = "Game Item ID",
+    placeholder = "Example: 40082",
+    flag = "GameItemID",
+
+    callback = function(Text)
+
+        Text = tostring(Text):gsub("%D", "")
+        Text = Text:sub(1, 7)
+
+        ItemID = Text
+
+        UpdateHeldItem()
     end
 })
 
-Tab:CreateToggle({
-    Name = "Inf Items (Visual)",
-    Flag = "InfItemsVisual",
-    Callback = function(value)
-        Enabled = value
+--//==================================================
+--// FIND ITEM
+--//==================================================
 
-        if value and (#ItemID < 1 or #ItemID > 7) then
+local function FindItemByID(ID)
+
+    if not ID or ID == "" then
+        return nil
+    end
+
+    local NumberID = tonumber(ID)
+
+    for _, Object in ipairs(game:GetDescendants()) do
+
+        if Object.Name == ID then
+            return Object
+        end
+
+        if NumberID then
+
+            local Attributes = {
+                "ID",
+                "Id",
+                "ItemID",
+                "ItemId",
+                "AssetID",
+                "AssetId"
+            }
+
+            for _, Attribute in ipairs(Attributes) do
+
+                local Value = Object:GetAttribute(Attribute)
+
+                if Value == NumberID
+                or tostring(Value) == ID then
+                    return Object
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+--//==================================================
+--// SPAWN VISUAL ITEM
+--//==================================================
+
+local function SpawnVisualItem()
+
+    local Character = Player.Character
+    if not Character then return end
+
+    local Root = Character:FindFirstChild("HumanoidRootPart")
+    if not Root then return end
+
+    local Source = FindItemByID(ItemID)
+    if not Source then return end
+
+    local Fake
+
+    pcall(function()
+        Fake = Source:Clone()
+    end)
+
+    if not Fake then return end
+
+    Fake.Name = "VisualItem_" .. ItemID
+    Fake.Parent = workspace
+
+    local Target =
+        Root.CFrame * CFrame.new(0, -1, -SPAWN_DISTANCE)
+
+    if Fake:IsA("Model") then
+
+        Fake:PivotTo(Target)
+
+        for _, Part in ipairs(Fake:GetDescendants()) do
+            if Part:IsA("BasePart") then
+                Part.Anchored = false
+                Part.CanCollide = true
+                Part.Massless = false
+            end
+        end
+
+    elseif Fake:IsA("BasePart") then
+
+        Fake.CFrame = Target
+        Fake.Anchored = false
+        Fake.CanCollide = true
+        Fake.Massless = false
+
+    else
+
+        Fake:Destroy()
+        return
+    end
+
+    table.insert(VisualItems, Fake)
+
+    while #VisualItems > MAX_ITEMS do
+
+        local Old = table.remove(VisualItems, 1)
+
+        if Old and Old.Parent then
+            Old:Destroy()
+        end
+    end
+end
+
+--//==================================================
+--// INFINITE ITEMS
+--//==================================================
+
+Tab:CreateToggle({
+    name = "Inf Items (Visual)",
+    flag = "InfItemsVisual",
+    default = false,
+
+    callback = function(Value)
+
+        if Value then
+
+            if #ItemID < 1 or #ItemID > 7 then
+
+                Rayfield:Notify({
+                    title = "Invalid Item ID",
+                    content = "Enter 1–7 numbers first.",
+                    duration = 3
+                })
+
+                Window:Set("InfItemsVisual", false)
+                return
+            end
+
+            Enabled = true
+
+        else
             Enabled = false
-            Rayfield:Notify({
-                Title = "Invalid Item ID",
-                Content = "Enter between 1 and 7 numbers.",
-                Duration = 3
-            })
+        end
+    end
+})
+
+task.spawn(function()
+
+    while task.wait(SPAWN_DELAY) do
+
+        if Enabled
+        and #ItemID >= 1
+        and #ItemID <= 7 then
+
+            SpawnVisualItem()
+        end
+    end
+end)
+
+--//==================================================
+--// MANUAL DELETE
+--//==================================================
+
+Tab:CreateToggle({
+    name = "Manual Delete",
+    flag = "ManualDelete",
+    default = false,
+
+    callback = function(Value)
+        ManualDelete = Value
+    end
+})
+
+RunService.Heartbeat:Connect(function()
+
+    if not ManualDelete then return end
+
+    local Character = Player.Character
+    if not Character then return end
+
+    local Root = Character:FindFirstChild("HumanoidRootPart")
+    if not Root then return end
+
+    for i = #VisualItems, 1, -1 do
+
+        local Item = VisualItems[i]
+
+        if not Item or not Item.Parent then
+
+            table.remove(VisualItems, i)
+
+        else
+
+            local Position
+
+            if Item:IsA("Model") then
+                Position = Item:GetPivot().Position
+            elseif Item:IsA("BasePart") then
+                Position = Item.Position
+            end
+
+            if Position
+            and (Root.Position - Position).Magnitude <= 4 then
+
+                Item:Destroy()
+                table.remove(VisualItems, i)
+            end
+        end
+    end
+end)
+
+--//==================================================
+--// MOBILE UP/DOWN BUTTONS
+--//==================================================
+
+local FlyControls = Instance.new("Frame")
+FlyControls.Name = "FlyControls"
+FlyControls.Size = UDim2.new(0, 110, 0, 110)
+FlyControls.Position = UDim2.new(1, -125, 1, -145)
+FlyControls.BackgroundTransparency = 1
+FlyControls.Visible = false
+FlyControls.Parent = ScreenGui
+
+local UpButton = Instance.new("TextButton")
+UpButton.Size = UDim2.new(0, 50, 0, 50)
+UpButton.Position = UDim2.new(0, 55, 0, 0)
+UpButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+UpButton.Text = "▲"
+UpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UpButton.TextSize = 22
+UpButton.Font = Enum.Font.GothamBold
+UpButton.Parent = FlyControls
+
+local UpCorner = Instance.new("UICorner")
+UpCorner.CornerRadius = UDim.new(0, 12)
+UpCorner.Parent = UpButton
+
+local DownButton = Instance.new("TextButton")
+DownButton.Size = UDim2.new(0, 50, 0, 50)
+DownButton.Position = UDim2.new(0, 55, 0, 55)
+DownButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+DownButton.Text = "▼"
+DownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+DownButton.TextSize = 22
+DownButton.Font = Enum.Font.GothamBold
+DownButton.Parent = FlyControls
+
+local DownCorner = Instance.new("UICorner")
+DownCorner.CornerRadius = UDim.new(0, 12)
+DownCorner.Parent = DownButton
+
+--// Hold buttons
+UpButton.MouseButton1Down:Connect(function()
+    FlyUp = true
+end)
+
+UpButton.MouseButton1Up:Connect(function()
+    FlyUp = false
+end)
+
+UpButton.MouseLeave:Connect(function()
+    FlyUp = false
+end)
+
+DownButton.MouseButton1Down:Connect(function()
+    FlyDown = true
+end)
+
+DownButton.MouseButton1Up:Connect(function()
+    FlyDown = false
+end)
+
+DownButton.MouseLeave:Connect(function()
+    FlyDown = false
+end)
+
+--//==================================================
+--// INFINITE YIELD STYLE FLY
+--//==================================================
+
+Tab:CreateToggle({
+    name = "Fly",
+    flag = "Fly",
+    default = false,
+
+    callback = function(Value)
+
+        Flying = Value
+
+        if FlyConnection then
+            FlyConnection:Disconnect()
+            FlyConnection = nil
+        end
+
+        if FlyBV then
+            FlyBV:Destroy()
+            FlyBV = nil
+        end
+
+        if FlyBG then
+            FlyBG:Destroy()
+            FlyBG = nil
+        end
+
+        FlyControls.Visible = Flying
+
+        local Character = Player.Character
+        local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+
+        if not Root or not Humanoid then
             return
         end
 
-        Rayfield:Notify({
-            Title = value and "Visual Items ON" or "Visual Items OFF",
-            Content = value and ("Using ID: " .. ItemID) or "Visual spawning stopped.",
-            Duration = 2
-        })
+        if not Flying then
+            Root.AssemblyLinearVelocity = Vector3.zero
+            Humanoid.AutoRotate = true
+            return
+        end
+
+        Humanoid.AutoRotate = false
+
+        FlyBV = Instance.new("BodyVelocity")
+        FlyBV.MaxForce = Vector3.new(
+            math.huge,
+            math.huge,
+            math.huge
+        )
+        FlyBV.Velocity = Vector3.zero
+        FlyBV.Parent = Root
+
+        FlyBG = Instance.new("BodyGyro")
+        FlyBG.MaxTorque = Vector3.new(
+            math.huge,
+            math.huge,
+            math.huge
+        )
+        FlyBG.P = 90000
+        FlyBG.D = 500
+        FlyBG.Parent = Root
+
+        FlyConnection = RunService.RenderStepped:Connect(function()
+
+            if not Flying
+            or not Root.Parent then
+                return
+            end
+
+            local Camera = workspace.CurrentCamera
+
+            local Look = Camera.CFrame.LookVector
+            local Right = Camera.CFrame.RightVector
+
+            local Direction = Vector3.zero
+
+            --// PC W/A/S/D
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                Direction += Look
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                Direction -= Look
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                Direction -= Right
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                Direction += Right
+            end
+
+            --// Mobile joystick
+            local Move = Humanoid.MoveDirection
+
+            if Move.Magnitude > 0.05 then
+                Direction += Move
+            end
+
+            --// Mobile UP
+            if FlyUp then
+                Direction += Vector3.new(0, 1, 0)
+            end
+
+            --// Mobile DOWN
+            if FlyDown then
+                Direction -= Vector3.new(0, 1, 0)
+            end
+
+            --// Normalize
+            if Direction.Magnitude > 0 then
+                Direction = Direction.Unit
+            end
+
+            FlyBV.Velocity = Direction * FLY_SPEED
+
+            --// Face camera
+            FlyBG.CFrame = CFrame.lookAt(
+                Root.Position,
+                Root.Position + Look
+            )
+        end)
     end
 })
 
-Tab:CreateDivider()
+--//==================================================
+--// CLEAR
+--//==================================================
 
 Tab:CreateButton({
-    Name = "Clear Visual Items",
-    Callback = function()
-        for _, item in ipairs(VisualItems) do
-            if item and item.Parent then
-                item:Destroy()
+    name = "Clear Visual Items",
+
+    callback = function()
+
+        for _, Object in ipairs(VisualItems) do
+
+            if Object and Object.Parent then
+                Object:Destroy()
             end
         end
 
         table.clear(VisualItems)
+
+        Rayfield:Notify({
+            title = "Cleared",
+            content = "All visual items removed.",
+            duration = 2
+        })
     end
 })
 
---// Visual item loop
-task.spawn(function()
-    while task.wait(0.25) do
-        if Enabled and #ItemID >= 1 and #ItemID <= 7 then
-            local character = player.Character
-            local root = character and character:FindFirstChild("HumanoidRootPart")
+--//==================================================
+--// CHARACTER RESPAWN
+--//==================================================
 
-            if root then
-                local tool = character:FindFirstChild(ItemID)
+Player.CharacterAdded:Connect(function()
 
-                if tool and tool:IsA("Tool") then
-                    local handle = tool:FindFirstChild("Handle")
+    task.wait(1)
 
-                    if handle then
-                        local fake = handle:Clone()
-                        fake.Name = "VisualItem_" .. ItemID
-                        fake.Parent = workspace
-
-                        -- 3 studs in front
-                        fake.CFrame =
-                            root.CFrame * CFrame.new(0, -1, -3)
-
-                        fake.Anchored = false
-                        fake.CanCollide = true
-                        fake.Massless = false
-
-                        table.insert(VisualItems, fake)
-
-                        -- Prevent unlimited copies from building up
-                        if #VisualItems > 50 then
-                            local old = table.remove(VisualItems, 1)
-
-                            if old and old.Parent then
-                                old:Destroy()
-                            end
-                        end
-                    end
-                end
-            end
+    for _, Object in ipairs(VisualItems) do
+        if Object and Object.Parent then
+            Object:Destroy()
         end
+    end
+
+    table.clear(VisualItems)
+
+    Flying = false
+    FlyUp = false
+    FlyDown = false
+
+    FlyControls.Visible = false
+
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+
+    if FlyBV then
+        FlyBV:Destroy()
+        FlyBV = nil
+    end
+
+    if FlyBG then
+        FlyBG:Destroy()
+        FlyBG = nil
     end
 end)
