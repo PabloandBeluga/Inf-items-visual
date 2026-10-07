@@ -1,0 +1,126 @@
+--// Rayfield Gen2
+local Rayfield = loadstring(game:HttpGet("https://sirius.menu/gen2"))()
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local ItemID = ""
+local Enabled = false
+local VisualItems = {}
+
+local Window = Rayfield:CreateWindow({
+    Name = "Visual Item Simulator",
+    LoadingTitle = "Visual Item Simulator",
+    LoadingSubtitle = "Initializing...",
+})
+
+local Tab = Window:CreateTab({
+    Name = "Inf Items (Visual)",
+    Icon = "package"
+})
+
+Tab:CreateDivider()
+
+Tab:CreateText({
+    Text = "VISUAL ITEM CONTROL"
+})
+
+Tab:CreateText({
+    Text = "Enter an item ID from the game.\nAllowed: 1–7 numbers."
+})
+
+local Input = Tab:CreateInput({
+    Name = "Item ID",
+    Placeholder = "Example: 40082",
+    Callback = function(text)
+        -- Numbers only
+        text = text:gsub("%D", "")
+
+        -- Maximum 7 digits
+        text = text:sub(1, 7)
+
+        ItemID = text
+    end
+})
+
+Tab:CreateToggle({
+    Name = "Inf Items (Visual)",
+    Flag = "InfItemsVisual",
+    Callback = function(value)
+        Enabled = value
+
+        if value and (#ItemID < 1 or #ItemID > 7) then
+            Enabled = false
+            Rayfield:Notify({
+                Title = "Invalid Item ID",
+                Content = "Enter between 1 and 7 numbers.",
+                Duration = 3
+            })
+            return
+        end
+
+        Rayfield:Notify({
+            Title = value and "Visual Items ON" or "Visual Items OFF",
+            Content = value and ("Using ID: " .. ItemID) or "Visual spawning stopped.",
+            Duration = 2
+        })
+    end
+})
+
+Tab:CreateDivider()
+
+Tab:CreateButton({
+    Name = "Clear Visual Items",
+    Callback = function()
+        for _, item in ipairs(VisualItems) do
+            if item and item.Parent then
+                item:Destroy()
+            end
+        end
+
+        table.clear(VisualItems)
+    end
+})
+
+--// Visual item loop
+task.spawn(function()
+    while task.wait(0.25) do
+        if Enabled and #ItemID >= 1 and #ItemID <= 7 then
+            local character = player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+
+            if root then
+                local tool = character:FindFirstChild(ItemID)
+
+                if tool and tool:IsA("Tool") then
+                    local handle = tool:FindFirstChild("Handle")
+
+                    if handle then
+                        local fake = handle:Clone()
+                        fake.Name = "VisualItem_" .. ItemID
+                        fake.Parent = workspace
+
+                        -- 3 studs in front
+                        fake.CFrame =
+                            root.CFrame * CFrame.new(0, -1, -3)
+
+                        fake.Anchored = false
+                        fake.CanCollide = true
+                        fake.Massless = false
+
+                        table.insert(VisualItems, fake)
+
+                        -- Prevent unlimited copies from building up
+                        if #VisualItems > 50 then
+                            local old = table.remove(VisualItems, 1)
+
+                            if old and old.Parent then
+                                old:Destroy()
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
