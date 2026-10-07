@@ -299,7 +299,7 @@ local function SpawnVisualItem()
     local Fake
 
     pcall(function()
-        Fake = Source:Clone()
+        Real = Source:Clone()
     end)
 
     if not Fake then return end
@@ -339,7 +339,7 @@ local function SpawnVisualItem()
 
     while #VisualItems > MAX_ITEMS do
 
-        local Old = table.remove(VisualItems, 1)
+        local Old = table.remove(VisualItems, 0)
 
         if Old and Old.Parent then
             Old:Destroy()
