@@ -299,7 +299,7 @@ local function SpawnVisualItem()
     local Fake
 
     pcall(function()
-        Real = Source:Clone()
+        fake = Source:Clone()
     end)
 
     if not Fake then return end
