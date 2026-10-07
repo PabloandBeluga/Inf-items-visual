@@ -323,7 +323,7 @@ local function SpawnVisualItem()
     local Target =
         Root.CFrame * CFrame.new(
             0,
-            -3,
+            -1,
             -SPAWN_DISTANCE
         )
 
@@ -470,6 +470,263 @@ end)
 --//==================================================
 --// MOBILE FLY CONTROLS
 --//==================================================
+
+local FlyControls = Instance.new("Frame")
+FlyControls.Name = "FlyControls"
+FlyControls.Size = UDim2.new(0, 110, 0, 110)
+FlyControls.Position = UDim2.new(1, -125, 1, -145)
+FlyControls.BackgroundTransparency = 1
+FlyControls.Visible = false
+FlyControls.Parent = ScreenGui
+
+local UpButton = Instance.new("TextButton")
+UpButton.Size = UDim2.new(0, 50, 0, 50)
+UpButton.Position = UDim2.new(0, 55, 0, 0)
+UpButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+UpButton.Text = "▲"
+UpButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+UpButton.TextSize = 22
+UpButton.Font = Enum.Font.GothamBold
+UpButton.Parent = FlyControls
+
+local UpCorner = Instance.new("UICorner")
+UpCorner.CornerRadius = UDim.new(0, 12)
+UpCorner.Parent = UpButton
+
+local DownButton = Instance.new("TextButton")
+DownButton.Size = UDim2.new(0, 50, 0, 50)
+DownButton.Position = UDim2.new(0, 55, 0, 55)
+DownButton.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+DownButton.Text = "▼"
+DownButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+DownButton.TextSize = 22
+DownButton.Font = Enum.Font.GothamBold
+DownButton.Parent = FlyControls
+
+local DownCorner = Instance.new("UICorner")
+DownCorner.CornerRadius = UDim.new(0, 12)
+DownCorner.Parent = DownButton
+
+UpButton.MouseButton1Down:Connect(function()
+    FlyUp = true
+end)
+
+UpButton.MouseButton1Up:Connect(function()
+    FlyUp = false
+end)
+
+UpButton.MouseLeave:Connect(function()
+    FlyUp = false
+end)
+
+DownButton.MouseButton1Down:Connect(function()
+    FlyDown = true
+end)
+
+DownButton.MouseButton1Up:Connect(function()
+    FlyDown = false
+end)
+
+DownButton.MouseLeave:Connect(function()
+    FlyDown = false
+end)
+
+--//==================================================
+--// FLY
+--//==================================================
+
+Tab:CreateToggle({
+    name = "Fly",
+    flag = "Fly",
+    default = false,
+
+    callback = function(Value)
+
+        Flying = Value
+
+        if FlyConnection then
+            FlyConnection:Disconnect()
+            FlyConnection = nil
+        end
+
+        if FlyBV then
+            FlyBV:Destroy()
+            FlyBV = nil
+        end
+
+        if FlyBG then
+            FlyBG:Destroy()
+            FlyBG = nil
+        end
+
+        FlyControls.Visible = Flying
+
+        local Character = Player.Character
+        local Root = Character and Character:FindFirstChild("HumanoidRootPart")
+        local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+
+        if not Root or not Humanoid then
+            return
+        end
+
+        if not Flying then
+
+            Root.AssemblyLinearVelocity = Vector3.zero
+            Humanoid.AutoRotate = true
+
+            return
+        end
+
+        Humanoid.AutoRotate = false
+
+        FlyBV = Instance.new("BodyVelocity")
+
+        FlyBV.MaxForce = Vector3.new(
+            math.huge,
+            math.huge,
+            math.huge
+        )
+
+        FlyBV.Velocity = Vector3.zero
+        FlyBV.Parent = Root
+
+        FlyBG = Instance.new("BodyGyro")
+
+        FlyBG.MaxTorque = Vector3.new(
+            math.huge,
+            math.huge,
+            math.huge
+        )
+
+        FlyBG.P = 90000
+        FlyBG.D = 500
+        FlyBG.Parent = Root
+
+        FlyConnection = RunService.RenderStepped:Connect(function()
+
+            if not Flying or not Root.Parent then
+                return
+            end
+
+            local Camera = workspace.CurrentCamera
+
+            local Look = Camera.CFrame.LookVector
+            local Right = Camera.CFrame.RightVector
+
+            local Direction = Vector3.zero
+
+            --// PC
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                Direction += Look
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                Direction -= Look
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                Direction -= Right
+            end
+
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                Direction += Right
+            end
+
+            --// Mobile joystick
+            local Move = Humanoid.MoveDirection
+
+            if Move.Magnitude > 0.05 then
+                Direction += Move
+            end
+
+            --// UP
+            if FlyUp then
+                Direction += Vector3.new(0, 1, 0)
+            end
+
+            --// DOWN
+            if FlyDown then
+                Direction -= Vector3.new(0, 1, 0)
+            end
+
+            if Direction.Magnitude > 0 then
+                Direction = Direction.Unit
+            end
+
+            FlyBV.Velocity = Direction * FLY_SPEED
+
+            FlyBG.CFrame = CFrame.lookAt(
+                Root.Position,
+                Root.Position + Look
+            )
+        end)
+    end
+})
+
+--//==================================================
+--// CLEAR VISUAL ITEMS
+--//==================================================
+
+Tab:CreateButton({
+    name = "Clear Visual Items",
+
+    callback = function()
+
+        for _, Object in ipairs(VisualItems) do
+
+            if Object and Object.Parent then
+                Object:Destroy()
+            end
+        end
+
+        table.clear(VisualItems)
+
+        Rayfield:Notify({
+            title = "Cleared",
+            content = "All visual items removed.",
+            duration = 2
+        })
+    end
+})
+
+--//==================================================
+--// CHARACTER RESPAWN
+--//==================================================
+
+Player.CharacterAdded:Connect(function()
+
+    task.wait(1)
+
+    for _, Object in ipairs(VisualItems) do
+
+        if Object and Object.Parent then
+            Object:Destroy()
+        end
+    end
+
+    table.clear(VisualItems)
+
+    Flying = false
+    FlyUp = false
+    FlyDown = false
+
+    FlyControls.Visible = false
+
+    if FlyConnection then
+        FlyConnection:Disconnect()
+        FlyConnection = nil
+    end
+
+    if FlyBV then
+        FlyBV:Destroy()
+        FlyBV = nil
+    end
+
+    if FlyBG then
+        FlyBG:Destroy()
+        FlyBG = nil
+    end
+end)==================================
 
 local FlyControls = Instance.new("Frame")
 FlyControls.Name = "FlyControls"
